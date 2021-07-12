@@ -14,6 +14,8 @@ The remaining files are custom made utilities.
 
 The following technologies are required for successful usage of all code in the repo
 
+Use `pip3 install -r requirements.txt`
+
 1. Pytube
 2. Moviepy
 3. Numpy
