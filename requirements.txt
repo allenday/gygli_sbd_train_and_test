@@ -1,0 +1,9 @@
+pytube
+moviepy
+numpy
+pandas
+torch
+cuda
+matplotlib
+pillow
+beautifulsoup4
