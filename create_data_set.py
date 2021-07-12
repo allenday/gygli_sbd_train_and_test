@@ -3,6 +3,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import requests as req
+import re
 import numpy as np
 from PIL import Image
 from pytube import YouTube
@@ -12,8 +13,26 @@ from pytube import exceptions as ex
 from video_processing import six_four_crop_video
 
 # download each video through the extracted link and resize the video to 64x64
-def downoadLinksAndResizeVideos(links, path):
+def resizeVideos(path):
     cropped_videos = []
+    for ent in enumerate(os.listdir(path)):
+        file_name = ent[1]
+        print(file_name)
+        if None == re.match('.*mp4$',file_name):
+            continue
+
+        #get each downloaded video and resize
+        video = VideoFileClip(path + '/'+ file_name)
+        print('duration', video.duration)
+        print('fps', video.fps)
+        print('frames', video.duration*video.fps)
+        six_four_video = six_four_crop_video(video)
+        w, h = six_four_video.size
+        if w == 64 and h == 64:
+            cropped_videos.append(six_four_video)
+    return cropped_videos
+
+def downloadLinks(links, path):
     """return an array of all the videos downloaded and resized videos are saved in the specified path
         create the path if it does not exist """
 
@@ -35,20 +54,13 @@ def downoadLinksAndResizeVideos(links, path):
         except KeyError:
             print('Video Unavailable --> Key Error')
         else:
-            yt.streams.filter(file_extension = 'mp4').first().download(path, file_name)
-            print('Video Downloaded')
+            try:
+                yt.streams.filter(file_extension = 'mp4').first().download(path, file_name)
+                print('Video Downloaded')
+            except urllib.error.HTTPError:
+                print('HTTPError')
 
-            #get each downloaded video and resize
-            video = VideoFileClip(path + '/'+ file_name + '.mp4')
-            print('duration', video.duration)
-            print('fps', video.fps)
-            print('frames', video.duration*video.fps)
-            six_four_video = six_four_crop_video(video)
-            w, h = six_four_video.size
-            if w == 64 and h == 64:
-                cropped_videos.append(six_four_video)
             print('-------------------------------------------------------------------------------------------------')
-    return cropped_videos
 
 # save largest multiple of ten frames from all videos and 
 def extractAndSaveFrames(data_type, videoList):
@@ -72,9 +84,9 @@ def extractAndSaveFrames(data_type, videoList):
             os.makedirs(path)
         print('number of frames for current video ', (i+1), 'is: ', len(frames))
         for j, frame in enumerate(frames):
-            frame_path = path + '/frame_' + str(j+1) + '.png'
+            frame_path = path + '/frame_' + str(j+1) + '.jpg'
             im = Image.fromarray(frame)
-            im.save(frame_path)
+            im.save(frame_path, quality=95, subsampling=1)
             f.write(frame_path + '\n')
     f.close()
 
@@ -85,18 +97,29 @@ def getPlaylistLinks(playList):
     # get YouTube playlist and extract the link for each video
     getRequest = req.get(playList)
     pageSource = getRequest.text
-    parser = bs(pageSource, 'html.parser')
-    videoLinks = parser.find_all('a', {'dir': 'ltr'})
-    len(videoLinks)
+    videoIds = re.findall('"videoId":"(.+?)"',pageSource)
+    uniqueVideoIds = set(videoIds)
+
+    #parser = bs(pageSource, 'html.parser')
+    #videoLinks = parser.find_all('a', {'dir': 'ltr'})
+    #print(pageSource)
+    #print(len(videoLinks))
+    print(uniqueVideoIds)
 
     videoList = []
     domain = "https://www.youtube.com"
-    for link in videoLinks:
-        tmp = domain + link.get('href')
-        tmp = tmp.replace("&t=0s", '')
-        if "watch" in tmp:
-            videoList.append(tmp)
+
+    for videoId in uniqueVideoIds:
+        videoList.append(domain + "/watch?v=" + videoId)
+
+    #for link in videoLinks:
+    #    tmp = domain + link.get('href')
+    #    tmp = tmp.replace("&t=0s", '')
+    #    if "watch" in tmp:
+    #        videoList.append(tmp)
+
     return videoList
+
 
 long_1 = getPlaylistLinks('https://www.youtube.com/playlist?list=PLxf1dxhJ3H9orru0qzPy1j5VDa41c4x7Z')
 long_2 = getPlaylistLinks('https://www.youtube.com/playlist?list=PLxf1dxhJ3H9pzLItmYdDeBQa0RE8zmsC3')
@@ -117,12 +140,15 @@ valid = videoList[split:len(videoList)]
 print('len train:', len(train))
 print('len valid:', len(valid))
 
+train_set = downloadLinks(train, './data/play_list_videos/train')
+valid_set = downloadLinks(valid, './data/play_list_videos/valid')
 
-train_set = downoadLinksAndResizeVideos(train, './data/play_list_videos/train')
-valid_set = downoadLinksAndResizeVideos(valid, './data/play_list_videos/valid')    
+train_set = resizeVideos('./data/play_list_videos/train')
+valid_set = resizeVideos('./data/play_list_videos/valid')
 
 extractAndSaveFrames('train',train_set)
 extractAndSaveFrames('valid',valid_set)
+
 
 print('All frames and videos for training and valudation have been saved to the directory data/')
 print('All frame paths for training and validation have been saved to train.txt and valid.txt')
